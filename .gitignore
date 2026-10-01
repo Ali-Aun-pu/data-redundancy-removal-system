@@ -1,3 +1,33 @@
+# Virtual environment
+
+venv/
+
+# Python cache
+
+**pycache**/
+*.py[cod]
+
+# Pytest
+
+.pytest_cache/
+
+# Environment variables
+
+.env
+
+# Logs
+
+logs/*.log
+
+# IDE
+
+.vscode/
+.idea/
+
+# OS files
+
+.DS_Store
+Thumbs.db
 venv/
 __pycache__/
 *.pyc

@@ -30,11 +30,22 @@ logger = logging.getLogger(__name__)
 
 def run_pipeline():
 
+    # Pipeline counters
+    total_records = 0
+    unique_inserted = 0
+    duplicates_found = 0
+    potential_duplicates = 0
+    skipped_records = 0
+    rejected_by_database = 0
+    errors = 0
+
     # Step 1: Load existing data from PostgreSQL
     existing_data = get_existing_customers()
 
     # Load new incoming data
     new_data = load_data("data/new_data.csv")
+
+    total_records = len(new_data)
 
     # Get already processed customer IDs
     processed_ids = get_processed_customer_ids()
@@ -51,67 +62,108 @@ def run_pipeline():
     # Step 4: Process classified records
     for record in classified_records:
 
-        customer_id = int(record["customer_id"])
+        try:
 
-        # Skip records that have already been processed
-        if customer_id in processed_ids:
+            customer_id = int(record["customer_id"])
 
-            logger.info(
-                f"SKIPPED: Customer {customer_id} already processed"
-            )
+            # Skip records that have already been processed
+            if customer_id in processed_ids:
 
-            continue
-
-        # Process UNIQUE records
-        if record["status"] == "UNIQUE":
-
-            inserted = insert_if_unique(record)
-
-            if inserted:
+                skipped_records += 1
 
                 logger.info(
-                    f"INSERTED: {record['name']}"
+                    f"SKIPPED: Customer {customer_id} already processed"
                 )
 
-                # Mark successfully inserted record as processed
+                continue
+
+            # Process UNIQUE records
+            if record["status"] == "UNIQUE":
+
+                inserted = insert_if_unique(record)
+
+                if inserted:
+
+                    unique_inserted += 1
+
+                    logger.info(
+                        f"INSERTED: {record['name']}"
+                    )
+
+                    mark_customer_processed(customer_id)
+
+                else:
+
+                    rejected_by_database += 1
+
+                    logger.info(
+                        f"REJECTED BY DATABASE: {record['name']}"
+                    )
+
+            # Process DUPLICATE records
+            elif record["status"] == "DUPLICATE":
+
+                duplicates_found += 1
+
+                log_duplicate(
+                    record,
+                    "DUPLICATE",
+                    record["duplicate_field"]
+                )
+
+                logger.info(
+                    f"DUPLICATE: {record['name']} | "
+                    f"Field: {record['duplicate_field']}"
+                )
+
                 mark_customer_processed(customer_id)
 
-            else:
+            # Process POTENTIAL_DUPLICATE records
+            elif record["status"] == "POTENTIAL_DUPLICATE":
 
-                logger.info(
-                    f"REJECTED BY DATABASE: {record['name']}"
-                )
+                logged = log_potential_duplicate(record)
 
-        # Process DUPLICATE records
-        elif record["status"] == "DUPLICATE":
+                if logged:
 
-            log_duplicate(
-                record,
-                "DUPLICATE",
-                record["duplicate_field"]
+                    potential_duplicates += 1
+
+                    logger.info(
+                        f"POTENTIAL DUPLICATE: {record['name']}"
+                    )
+
+                else:
+
+                    logger.info(
+                        f"ALREADY IN REVIEW QUEUE: {record['name']}"
+                    )
+
+                # Do NOT mark as processed yet.
+                # It is waiting for a review decision.
+
+        except Exception as e:
+
+            errors += 1
+
+            logger.error(
+                f"ERROR processing customer "
+                f"{record.get('customer_id')}: {e}"
             )
 
-            logger.info(
-                f"DUPLICATE: {record['name']} | "
-                f"Field: {record['duplicate_field']}"
-            )
-
-            # Mark duplicate record as processed
-            mark_customer_processed(customer_id)
-
-        # Process POTENTIAL_DUPLICATE records
-        elif record["status"] == "POTENTIAL_DUPLICATE":
-
-            log_potential_duplicate(record)
-
-            logger.info(
-                f"POTENTIAL DUPLICATE: {record['name']}"
-            )
-
-            # Do NOT mark as processed yet.
-            # It is waiting for a review decision.
+    # Pipeline summary
+    logger.info("")
+    logger.info("========== PIPELINE SUMMARY ==========")
+    logger.info(f"Records loaded:         {total_records}")
+    logger.info(f"Unique inserted:        {unique_inserted}")
+    logger.info(f"Duplicates found:       {duplicates_found}")
+    logger.info(f"Potential duplicates:   {potential_duplicates}")
+    logger.info(f"Skipped records:        {skipped_records}")
+    logger.info(f"Rejected by database:   {rejected_by_database}")
+    logger.info(f"Errors:                 {errors}")
+    logger.info("======================================")
+    logger.info("")
 
 
 if __name__ == "__main__":
 
     run_pipeline()
+

@@ -1,15 +1,18 @@
+import os
 import psycopg2
 import pandas as pd
+from dotenv import load_dotenv
 
+load_dotenv()
 
 def get_connection():
 
     connection = psycopg2.connect(
-        host="localhost",
-        database="data_redundancy_db",
-        user="postgres",
-        password="Pak@2019@",
-        port="5432"
+        host=os.getenv("DB_HOST", "localhost"),
+        database=os.getenv("DB_NAME", "data_redundancy_db"),
+        user=os.getenv("DB_USER", "postgres"),
+        password=os.getenv("DB_PASSWORD"),
+        port=os.getenv("DB_PORT", "5432")
     )
 
     return connection

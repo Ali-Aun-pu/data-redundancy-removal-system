@@ -95,4 +95,8 @@ def classify_records(new_data, existing_data):
 
         results.append(record)
 
+        existing_customer_ids.add(customer_id)
+        existing_emails.add(email)
+        existing_phones.add(phone)
+
     return results
